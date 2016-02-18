@@ -154,8 +154,9 @@ Create2::Create2(
 
 Create2::~Create2()
 {
-  // stop();
-  power();
+  reset();
+  //stop();
+  //power();
   delete impl_;
 }
 
@@ -249,7 +250,7 @@ void Create2::update()
         uint32_t sum = 0;
         for (size_t j = i; j <= size + i + 2; ++j) {
           sum += impl_->readBuffer_[j];
-          std::cout << (int)impl_->readBuffer_[j] << " ";
+          //std::cout << (int)impl_->readBuffer_[j] << " ";
         }
 
         if ((sum & 0xFF) == 0) {
@@ -362,9 +363,16 @@ void Create2::update()
         }
 
         // delete portion of buffer
-        impl_->readBuffer_.erase(impl_->readBuffer_.begin(), impl_->readBuffer_.begin() + size + i);
+        impl_->readBuffer_.erase(impl_->readBuffer_.begin(), impl_->readBuffer_.begin() + i + size+3);
+        i = -1;
       }
+		else {
+		  break;
+		}
     }
+    else {
+	  std::cout << "unknown" << (int)impl_->readBuffer_[i] << std::endl;
+	}
   }
 
 }

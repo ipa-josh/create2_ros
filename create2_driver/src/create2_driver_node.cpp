@@ -10,6 +10,8 @@
 class Create2ROS
   : public Create2
 {
+	ros::Time last_done_;
+	bool isPassive_;
 public:
   Create2ROS(
     const std::string& port,
@@ -25,8 +27,19 @@ public:
     , x_(0)
     , y_(0)
     , theta_(0)
+    , isPassive_(false)
   {
     ros::NodeHandle n;
+    
+    init();
+
+    subscribeCmdVel_ = n.subscribe("cmd_vel", 1, &Create2ROS::cmdVelChanged, this);
+    odomPub_ = n.advertise<nav_msgs::Odometry>("odom", 50);
+  }
+  
+  void init() {
+    ROS_INFO("init. Create2");
+    
     start();
     safe();
 
@@ -47,11 +60,9 @@ public:
 
     // ROS_INFO("Battery: %.1f %%", create2_.batteryCharge() / (float)create2_.batteryCapacity() * 100.0f);
 
-
     digitsLedsAscii("ABCD");
-
-    subscribeCmdVel_ = n.subscribe("cmd_vel", 1, &Create2ROS::cmdVelChanged, this);
-    odomPub_ = n.advertise<nav_msgs::Odometry>("odom", 50);
+    
+    last_done_ = ros::Time::now();
   }
 
   ~Create2ROS()
@@ -64,20 +75,44 @@ public:
   void cmdVelChanged(
     const geometry_msgs::Twist::ConstPtr& msg)
   {
-    driveDirect(msg->linear.y * 1000, msg->linear.x * 1000);
+	double v_left  =  msg->angular.z * 0.50 + 20.0 * std::min(msg->linear.x, 0.1) / (fabs(msg->angular.z) + 1);
+	double v_right = -msg->angular.z * 0.50 + 20.0 * std::min(msg->linear.x, 0.1) / (fabs(msg->angular.z) + 1);
+
+	double v_desired = 0.4;
+
+	double v_avg = (fabs(v_left) + fabs(v_right)) / 2.0;
+	if (v_avg > v_desired) {
+		v_left  = v_left  / v_avg * v_desired;
+		v_right = v_right / v_avg * v_desired;
+	}
+    
+    if(v_avg>0 && isPassive_)	//change from passive to save
+		safe();
+        
+    driveDirect(v_left * 1000, v_right * 1000);
+  }
+  
+  virtual void onCycle() {
+	  if(ros::Time::now()-last_done_>ros::Duration(5.))
+		init();
   }
 
   virtual void onUpdate(
     const State& state)
   {
     static ros::Time lastTime = ros::Time::now();
+    
+    last_done_ = lastTime;
 
     ros::Time currentTime = ros::Time::now();
     double dt = (currentTime - lastTime).toSec();
     double lastX = x_;
     double lastY = y_;
     double lastTheta = theta_;
+    
+    isPassive_ = (state.mode==ModePassive);
 
+#ifdef DBG_PRINT
     std::cout << "Mode: " << state.mode << std::endl;
     std::cout << "V: " << state.voltageInMV << " mV" << std::endl;
     std::cout << "Current: " << state.currentInMA << " mA" << std::endl;
@@ -90,13 +125,16 @@ public:
     std::cout << "CliffRight: " << state.cliffRightSignalStrength << std::endl;
     std::cout << "LeftEncoder: " << state.leftEncoderCounts << std::endl;
     std::cout << "RightEncoder: " << state.rightEncoderCounts << std::endl;
+#endif
 
     if (hasPreviousCounts_)
     {
       int32_t dtl = state.leftEncoderCounts - previousLeftEncoderCount_;
       int32_t dtr = state.rightEncoderCounts - previousRightEncoderCount_;
 
+#ifdef DBG_PRINT
       std::cout << "dtl: " << dtl << " dtr: " << dtr << std::endl;
+#endif
 
       if (dtl < -30000) {
         dtl += 65535;
@@ -115,7 +153,9 @@ public:
       double Dr = M_PI * WheelDiameterInMM * dtr / CountsPerRev;
       double Dc = (Dl + Dr) / 2.0;
 
+#ifdef DBG_PRINT
       std::cout << "Dl: " << Dl << " Dr: " << Dr << " Dc: " << Dc << std::endl;
+#endif
 
       x_ += Dc * cos(theta_) / 1000.0;
       y_ += Dc * sin(theta_) / 1000.0;
@@ -130,7 +170,9 @@ public:
     previousRightEncoderCount_ = state.rightEncoderCounts;
     hasPreviousCounts_ = true;
 
+#ifdef DBG_PRINT
     std::cout << "State: (" << x_ << ", " << y_ << ", " << theta_ << ")" << std::endl;
+#endif
 
     // send tf
     tf::Transform transform;

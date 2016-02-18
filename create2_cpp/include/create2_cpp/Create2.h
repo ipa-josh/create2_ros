@@ -1,5 +1,7 @@
 #pragma once
 
+//#define DBG_PRINT
+
 class Create2Impl;
 
 class Create2
@@ -105,6 +107,8 @@ public:
       const State& state)
     {
     }
+    
+    virtual void onCycle() {}
 
     // int8_t temperature();
 
