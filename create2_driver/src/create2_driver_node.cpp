@@ -127,6 +127,7 @@ public:
     std::cout << "RightEncoder: " << state.rightEncoderCounts << std::endl;
 #endif
 
+	double Dc = 0;
     if (hasPreviousCounts_)
     {
       int32_t dtl = state.leftEncoderCounts - previousLeftEncoderCount_;
@@ -151,7 +152,7 @@ public:
 
       double Dl = M_PI * WheelDiameterInMM * dtl / CountsPerRev;
       double Dr = M_PI * WheelDiameterInMM * dtr / CountsPerRev;
-      double Dc = (Dl + Dr) / 2.0;
+      Dc = (Dl + Dr) / 2.0;
 
 #ifdef DBG_PRINT
       std::cout << "Dl: " << Dl << " Dr: " << Dr << " Dc: " << Dc << std::endl;
@@ -197,8 +198,8 @@ public:
 
     //set the velocity
     odom.child_frame_id = "base_link";
-    odom.twist.twist.linear.x = dt > 0 ? (x_ - lastX)/dt : 0.0;
-    odom.twist.twist.linear.y = dt > 0 ? (y_ - lastY)/dt : 0.0;
+    odom.twist.twist.linear.x = dt > 0 ? Dc/(1000*dt) : 0.0;//dt > 0 ? (x_ - lastX)/dt : 0.0;
+    //odom.twist.twist.linear.y = dt > 0 ? (y_ - lastY)/dt : 0.0;
     odom.twist.twist.angular.z = dt > 0 ? atan2(sin(theta_ - lastTheta), cos(theta_ - lastTheta))/dt : 0.0;
 
     //publish the message
