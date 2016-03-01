@@ -11,7 +11,11 @@
 #include "Create2.h"
 #include "Create2Types.h"
 
+//#define DBG_PRINT
+
 using namespace boost::endian;
+
+//FILE *fp_log = fopen("/tmp/log.serial", "wb");
 
 class Create2Impl
 {
@@ -92,11 +96,13 @@ public:
     uint8_t opData = (uint8_t)op;
     serial_.flush();
     size_t written = serial_.write(&opData, 1);
+    //fprintf(fp_log, "write op %d with %d bytes\n", (int)opData, numBytes);
     if (written != 1) {
       throw std::runtime_error("Couldn't write enough data!");
     }
     if (data && numBytes) {
       written = serial_.write(data, numBytes);
+      //fwrite(data,numBytes,1,fp_log);
       if (written != numBytes) {
         throw std::runtime_error("Couldn't write enough data!");
       }
@@ -107,6 +113,7 @@ public:
   {
     big_uint16_t result;
     size_t read = serial_.read((uint8_t*)&result, 2);
+    //fprintf(fp_log, "read uint16 %d\n", (int)result);
     if (read != 2) {
       throw std::runtime_error("Couldn't read enough data!");
     }
@@ -117,6 +124,7 @@ public:
   {
     big_int8_t result;
     size_t read = serial_.read((uint8_t*)&result, 1);
+    //fprintf(fp_log, "read int8 %d\n", (int)result);
     if (read != 1) {
       throw std::runtime_error("Couldn't read enough data!");
     }
@@ -127,6 +135,7 @@ public:
   {
     big_int16_t result;
     size_t read = serial_.read((uint8_t*)&result, 2);
+    //fprintf(fp_log, "read int16 %d\n", (int)result);
     if (read != 2) {
       throw std::runtime_error("Couldn't read enough data!");
     }
@@ -166,6 +175,9 @@ void Create2::start()
   // TODO: check for success?
   std::this_thread::sleep_for(std::chrono::milliseconds(20)); // wait ~20ms for mode changes
   impl_->mode_ = ModePassive;
+#ifdef DBG_PRINT
+  std::cout<<"send: start"<<std::endl;
+#endif
 }
 
 void Create2::reset()
@@ -173,13 +185,9 @@ void Create2::reset()
   impl_->send(OpReset);
   std::this_thread::sleep_for(std::chrono::milliseconds(20)); // wait ~20ms for mode changes
   impl_->mode_ = ModeOff;
-}
-
-void Create2::stop()
-{
-  impl_->send(OpStop);
-  std::this_thread::sleep_for(std::chrono::milliseconds(20)); // wait ~20ms for mode changes
-  impl_->mode_ = ModeOff;
+#ifdef DBG_PRINT
+  std::cout<<"send: reset"<<std::endl;
+#endif
 }
 
 void Create2::safe()
@@ -187,6 +195,9 @@ void Create2::safe()
   impl_->send(OpSafe);
   std::this_thread::sleep_for(std::chrono::milliseconds(20)); // wait ~20ms for mode changes
   impl_->mode_ = ModeSafe;
+#ifdef DBG_PRINT
+  std::cout<<"send: safe"<<std::endl;
+#endif
 }
 
 void Create2::full()
@@ -194,6 +205,9 @@ void Create2::full()
   impl_->send(OpFull);
   std::this_thread::sleep_for(std::chrono::milliseconds(20)); // wait ~20ms for mode changes
   impl_->mode_ = ModeFull;
+#ifdef DBG_PRINT
+  std::cout<<"send: full"<<std::endl;
+#endif
 }
 
 void Create2::power()
@@ -201,6 +215,9 @@ void Create2::power()
   impl_->send(OpPower);
   std::this_thread::sleep_for(std::chrono::milliseconds(20)); // wait ~20ms for mode changes
   impl_->mode_ = ModePassive;
+#ifdef DBG_PRINT
+  std::cout<<"send: power"<<std::endl;
+#endif
 }
 
 void Create2::driveDirect(
@@ -221,6 +238,9 @@ void Create2::driveDirect(
   data d{rightWheelVelocityInMMperSec, leftWheelVelocityInMMperSec};
 
   impl_->send(OpDriveDirect, (const uint8_t*)&d, sizeof(d));
+#ifdef DBG_PRINT
+  std::cout<<"send: driveDirect "<<rightWheelVelocityInMMperSec<<"/"<<leftWheelVelocityInMMperSec<<std::endl;
+#endif
 }
 
 void Create2::digitsLedsAscii(
@@ -236,15 +256,24 @@ void Create2::startStream(
   data.push_back((uint8_t)ids.size());
   data.insert(data.end(), ids.begin(), ids.end());
   impl_->send(OpStream, &data[0], data.size());
+#ifdef DBG_PRINT
+  std::cout<<"send: startStream"<<std::endl;
+#endif
 }
 
 void Create2::update()
 {
+  onCycle();
+  
   impl_->serial_.read(impl_->readBuffer_, impl_->serial_.available());
+  
+  //fprintf(fp_log, "read data with %d bytes\n", (int)impl_->readBuffer_.size());
+  //fwrite(&impl_->readBuffer_[0], impl_->readBuffer_.size(), 1, fp_log);
 
   for (size_t i = 0; i + 1 < impl_->readBuffer_.size(); ++i) {
     if (impl_->readBuffer_[i] == 19) {
       uint8_t size = impl_->readBuffer_[i+1];
+	  //fprintf(fp_log, "parse packet with %d bytes at %d\n", (int)size, (int)i);
       if (impl_->readBuffer_.size() > size + i + 2) {
         // check checksum
         uint32_t sum = 0;
@@ -360,6 +389,7 @@ void Create2::update()
           onUpdate(state);
         } else {
           std::cout << "checksum incorrect!" << sum << std::endl;
+          //fprintf(fp_log, "checksum incorrect\n");
         }
 
         // delete portion of buffer
@@ -367,13 +397,19 @@ void Create2::update()
         i = -1;
       }
 		else {
+		  //std::cout << "too small" << (int)size << std::endl;
+		  //fprintf(fp_log, "too small %d at %d\n", (int)size, (int)i);
+		  
 		  break;
 		}
     }
     else {
 	  std::cout << "unknown" << (int)impl_->readBuffer_[i] << std::endl;
+	  //fprintf(fp_log, "unknown %d at %d\n", (int)impl_->readBuffer_[i], (int)i);
 	}
   }
+  
+  //fflush(fp_log);
 
 }
 

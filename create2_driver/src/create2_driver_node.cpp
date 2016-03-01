@@ -7,6 +7,8 @@
 
 #include <create2_cpp/Create2.h>
 
+//#define DBG_PRINT
+
 class Create2ROS
   : public Create2
 {
@@ -40,6 +42,7 @@ public:
   void init() {
     ROS_INFO("init. Create2");
     
+    //reset();
     start();
     safe();
 
