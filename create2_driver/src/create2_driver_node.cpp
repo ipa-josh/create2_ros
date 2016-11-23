@@ -36,6 +36,12 @@ public:
   {
     ros::NodeHandle n;
     
+    //parameters
+    ros::NodeHandle pn("~");
+    bool backwards = false;
+    pn.param<bool>("backwards", backwards, backwards);
+    setBackwards(backwards);
+    
     init();
 
     subscribeCmdVel_ = n.subscribe("cmd_vel", 1, &Create2ROS::cmdVelChanged, this);
