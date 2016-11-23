@@ -4,6 +4,7 @@
 #include <geometry_msgs/Twist.h>
 #include <tf/transform_broadcaster.h>
 #include <nav_msgs/Odometry.h>
+#include <std_msgs/String.h>
 
 #include <create2_cpp/Create2.h>
 
@@ -36,6 +37,7 @@ public:
     init();
 
     subscribeCmdVel_ = n.subscribe("cmd_vel", 1, &Create2ROS::cmdVelChanged, this);
+    mode_sub_  = n.subscribe<std_msgs::String>("/mode", 1, &Create2ROS::cmdModeReceived, this);
     odomPub_ = n.advertise<nav_msgs::Odometry>("odom", 50);
   }
   
@@ -217,8 +219,39 @@ public:
 
   }
 
+	void cmdModeReceived(const std_msgs::String::ConstPtr& cmd_)
+	{
+		std::string cmd = cmd_->data.c_str();
+
+		if(cmd=="exit") return;
+		else if(cmd=="start")
+		{
+			start();
+		}
+		else if(cmd=="stop")
+		{
+			stop();
+		}
+		else if(cmd=="reset")
+		{
+			reset();
+		}
+		else if(cmd=="powerdown")
+		{
+			power();
+		}
+		else if(cmd=="safe")
+		{
+			safe();
+		}
+		else if(cmd=="full")
+		{
+			full();
+		}
+	}
+
 private:
-  ros::Subscriber subscribeCmdVel_;
+  ros::Subscriber subscribeCmdVel_, mode_sub_;
   tf::TransformBroadcaster br_;
   ros::Publisher odomPub_;
 
