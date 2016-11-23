@@ -180,6 +180,17 @@ void Create2::start()
 #endif
 }
 
+void Create2::stop()
+{
+  impl_->send(OpStop);
+  // TODO: check for success?
+  std::this_thread::sleep_for(std::chrono::milliseconds(20)); // wait ~20ms for mode changes
+  impl_->mode_ = ModeOff;
+#ifdef DBG_PRINT
+  std::cout<<"send: stop"<<std::endl;
+#endif
+}
+
 void Create2::reset()
 {
   impl_->send(OpReset);
