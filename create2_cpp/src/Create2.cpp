@@ -156,7 +156,7 @@ Create2::Create2(
   const std::string& port,
   uint32_t brcPin,
   bool useBrcPin)
-  : impl_(nullptr)
+  : impl_(nullptr), backwards_(false)
 {
   impl_ = new Create2Impl(port, brcPin, useBrcPin);
 }
@@ -224,6 +224,11 @@ void Create2::driveDirect(
   int16_t rightWheelVelocityInMMperSec,
   int16_t leftWheelVelocityInMMperSec)
 {
+  if(backwards_) {
+	rightWheelVelocityInMMperSec = -rightWheelVelocityInMMperSec;
+	leftWheelVelocityInMMperSec = -leftWheelVelocityInMMperSec;
+  }
+  
   //assert(mode_ == ModeSafe || mode_ == ModeFull);
   //assert(rightWheelVelocityInMMperSec >= -500 && rightWheelVelocityInMMperSec <= 500);
   //assert(leftWheelVelocityInMMperSec >= -500 && leftWheelVelocityInMMperSec <= 500);

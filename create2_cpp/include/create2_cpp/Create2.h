@@ -109,6 +109,8 @@ public:
     }
     
     virtual void onCycle() {}
+    
+	void setBackwards(const bool b) {backwards_=b;}
 
     // int8_t temperature();
 
@@ -126,4 +128,5 @@ public:
 
 private:
   Create2Impl* impl_;
+  bool backwards_;
 };
