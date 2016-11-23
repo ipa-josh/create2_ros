@@ -9,6 +9,8 @@
 #include <create2_cpp/Create2.h>
 
 //#define DBG_PRINT
+#define MAX_FREQUENCY				100
+#define ROOMBA_AXLE_LENGTH			0.235
 
 class Create2ROS
   : public Create2
@@ -77,13 +79,20 @@ public:
     // power();
   }
 
+ros::Time last_cmd_;
   void cmdVelChanged(
     const geometry_msgs::Twist::ConstPtr& msg)
   {
-	double v_left  =  msg->angular.z * 0.50 + 20.0 * std::min(msg->linear.x, 0.1) / (fabs(msg->angular.z) + 1);
-	double v_right = -msg->angular.z * 0.50 + 20.0 * std::min(msg->linear.x, 0.1) / (fabs(msg->angular.z) + 1);
+#if 1
+	int left_speed_mm_s = (int)((msg->linear.x-ROOMBA_AXLE_LENGTH*msg->angular.z/2)*1e3);		// Left wheel velocity in mm/s
+	int right_speed_mm_s = (int)((msg->linear.x+ROOMBA_AXLE_LENGTH*msg->angular.z/2)*1e3);	// Right wheel velocity in mm/s
+	
+    driveDirect(right_speed_mm_s, left_speed_mm_s);
+#else
+	double v_left  =  msg->angular.z * 0.2 + 2.0 * std::min(msg->linear.x, 0.2) / (fabs(msg->angular.z * 0.5) + 1);
+	double v_right = -msg->angular.z * 0.2 + 2.0 * std::min(msg->linear.x, 0.2) / (fabs(msg->angular.z * 0.5) + 1);
 
-	double v_desired = 0.4;
+	double v_desired = 0.2;
 
 	double v_avg = (fabs(v_left) + fabs(v_right)) / 2.0;
 	if (v_avg > v_desired) {
@@ -94,12 +103,18 @@ public:
     if(v_avg>0 && isPassive_)	//change from passive to save
 		safe();
         
-    driveDirect(v_left * 1000, v_right * 1000);
+    driveDirect(v_left * 1500, v_right * 1500);
+#endif
+	last_cmd_ = ros::Time::now();
   }
   
   virtual void onCycle() {
 	  if(ros::Time::now()-last_done_>ros::Duration(5.))
 		init();
+	  if(ros::Time::now()-last_cmd_>ros::Duration(1.)) {
+		driveDirect(0,0);
+last_cmd_ = ros::Time::now();
+	}
   }
 
   virtual void onUpdate(
@@ -110,7 +125,7 @@ public:
     last_done_ = lastTime;
 
     ros::Time currentTime = ros::Time::now();
-    double dt = (currentTime - lastTime).toSec();
+    double dt = std::max(1./MAX_FREQUENCY, (currentTime - lastTime).toSec()); //make sure we get a reasonable time if we get two packets
     double lastX = x_;
     double lastY = y_;
     double lastTheta = theta_;
@@ -177,7 +192,7 @@ public:
     hasPreviousCounts_ = true;
 
 #ifdef DBG_PRINT
-    std::cout << "State: (" << x_ << ", " << y_ << ", " << theta_ << ")" << std::endl;
+    std::cout << "State: (" << x_ << ", " << y_ << ", " << theta_ << ")    "<< dt << std::endl;
 #endif
 
     // send tf
@@ -188,7 +203,7 @@ public:
     transform.setRotation(q);
     br_.sendTransform(tf::StampedTransform(transform, currentTime, "odom", "base_link"));
 
-    // publish odomotry message
+    // publish odomotry messagelast
     geometry_msgs::Quaternion odomQuat = tf::createQuaternionMsgFromYaw(theta_);
 
     nav_msgs::Odometry odom;
@@ -203,10 +218,17 @@ public:
 
     //set the velocity
     odom.child_frame_id = "base_link";
-    odom.twist.twist.linear.x = dt > 0 ? Dc/(1000*dt) : 0.0;//dt > 0 ? (x_ - lastX)/dt : 0.0;
+    /*odom.twist.twist.linear.x = dt > 0 ? Dc/(1000*dt) : 0.0;//dt > 0 ? (x_ - lastX)/dt : 0.0;
     //odom.twist.twist.linear.y = dt > 0 ? (y_ - lastY)/dt : 0.0;
-    odom.twist.twist.angular.z = dt > 0 ? atan2(sin(theta_ - lastTheta), cos(theta_ - lastTheta))/dt : 0.0;
+    odom.twist.twist.angular.z = dt > 0 ? atan2(sin(theta_ - lastTheta), cos(theta_ - lastTheta))/dt : 0.0;*/
 
+	odom.twist.twist.linear.x = dt > 0 ? (x_ - lastX)/dt : 0.0;
+	odom.twist.twist.linear.y = dt > 0 ? (y_ - lastY)/dt : 0.0;
+    odom.twist.twist.angular.z = dt > 0 ? (theta_ - lastTheta)/dt : 0.0;
+    
+    //std::cout << "State*:(" << lastX << ", " << lastY << ", " << lastTheta << ")    "<< dt << std::endl;
+    //std::cout << "speed :(" << odom.twist.twist.linear.x << ", " << odom.twist.twist.linear.y << ", " << odom.twist.twist.angular.z << ")    "<< dt << std::endl;
+	
     //publish the message
     odomPub_.publish(odom);
 
@@ -296,7 +318,7 @@ int main(int argc, char **argv)
 
   g_create2 = new Create2ROS(port, brcPin, useBrcPin);
 
-  ros::Rate loop_rate(10);
+  ros::Rate loop_rate(MAX_FREQUENCY);
   while (ros::ok())
   {
 
