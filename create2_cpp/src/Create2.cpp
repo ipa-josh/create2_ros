@@ -238,6 +238,7 @@ void Create2::driveDirect(
   if(backwards_) {
 	rightWheelVelocityInMMperSec = -rightWheelVelocityInMMperSec;
 	leftWheelVelocityInMMperSec = -leftWheelVelocityInMMperSec;
+	std::swap(rightWheelVelocityInMMperSec, leftWheelVelocityInMMperSec);
   }
   
   //assert(mode_ == ModeSafe || mode_ == ModeFull);
@@ -388,7 +389,10 @@ void Create2::update()
               {
                 big_int16_t result;
                 memcpy(&result, &impl_->readBuffer_[pos], sizeof(big_int16_t));
-                state.leftEncoderCounts = result;
+                if(backwards_)
+					state.rightEncoderCounts = -result;
+				else
+					state.leftEncoderCounts = result;
                 pos += 2;
                 break;
               }
@@ -396,7 +400,10 @@ void Create2::update()
               {
                 big_int16_t result;
                 memcpy(&result, &impl_->readBuffer_[pos], sizeof(big_int16_t));
-                state.rightEncoderCounts = result;
+                if(backwards_)
+					state.leftEncoderCounts = -result;
+				else
+					state.rightEncoderCounts = result;
                 pos += 2;
                 break;
               }
@@ -420,7 +427,7 @@ void Create2::update()
 		}
     }
     else {
-	  std::cout << "unknown" << (int)impl_->readBuffer_[i] << std::endl;
+	  //std::cout << "unknown" << (int)impl_->readBuffer_[i] << std::endl;
 	  //fprintf(fp_log, "unknown %d at %d\n", (int)impl_->readBuffer_[i], (int)i);
 	}
   }
